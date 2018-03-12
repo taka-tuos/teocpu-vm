@@ -20,7 +20,7 @@ r65     : スタックポインタ
 [命令名] [引数(ない場合もあり)]
  [opコード/16進2ケタ] [引数データ/16進2ケタ区切り]
   [処理内容]
-[備考(ない場合もあり)]
+[説明]
 
 引数 :
 	r   : レジスタ
@@ -31,32 +31,37 @@ r65     : スタックポインタ
 	xx : 即値のうち8bit(並びはリトルエンディアン)
 
 処理内容 :
-	D[xx]    : メモリのxx番地(32bitアクセス)
-	W[xx]    : メモリのxx番地(16bitアクセス)
-	B[xx]    : メモリのxx番地(8bitアクセス)
-	r        : 引数(レジスタ)
-	imm      : 引数(即値)
-	push(xx) : D[sp] = xx; sp += 4
-	pop(xx)  : sp -= 4; xx = D[sp]
-	#name    : 一時的に数値を保存する内部変数
+	D[xx]      : メモリのxx番地(32bitアクセス)
+	W[xx]      : メモリのxx番地(16bitアクセス)
+	B[xx]      : メモリのxx番地(8bitアクセス)
+	r          : 引数(レジスタ)
+	imm        : 引数(即値)
+	push(xx)   : D[sp] = xx; sp += 4
+	pop(xx)    : sp -= 4; xx = D[sp]
+	#name      : 一時的に数値を保存する内部変数
+	[operator] : 符号なし演算(乗算・除算時のみ関係アリ)
 
 §命令リスト(多分そのうち増えます)
 
 NOP
  00
-  何もしない
+  (no operation)
+何もせず素通りする
 
 LR r
  01 rr
   push(r)
+スタックにレジスタの値を積む
 
 LI imm
  02 xx xx xx xx
   push(imm)
+スタックに即値を積む
 
 SR r
  03 rr
   pop(r)
+スタックからとった値をレジスタに入れる
 
 STB
  04
@@ -64,6 +69,8 @@ STB
   pop(#base_addr)
   pop(#data)
   B[#base_addr + #offset_addr] = #data & 0xff
+スタックに積んである値を上からオフセット・ベースアドレス・データと解釈し
+ベースアドレス+オフセット番地にデータを書き込む(8bitアクセス)
 
 STW
  05
@@ -71,6 +78,8 @@ STW
   pop(#base_addr)
   pop(#data)
   W[#base_addr + #offset_addr] = #data & 0xffff
+スタックに積んである値を上からオフセット・ベースアドレス・データと解釈し
+ベースアドレス+オフセット番地にデータを書き込む(16bitアクセス)
 
 STD
  06
@@ -78,22 +87,58 @@ STD
   pop(#base_addr)
   pop(#data)
   D[#base_addr + #offset_addr] = #data
+スタックに積んである値を上からオフセット・ベースアドレス・データと解釈し
+ベースアドレス+オフセット番地にデータを書き込む(32bitアクセス)
 
 LDB
  07
   pop(#offset_addr)
   pop(#base_addr)
   push(B[#base_addr + #offset_addr])
+スタックに積んである値を上からオフセット・ベースアドレスと解釈し
+ベースアドレス+オフセット番地のデータをスタックに積む(8bitアクセス)
 
 LDW
  08
   pop(#offset_addr)
   pop(#base_addr)
   push(W[#base_addr + #offset_addr])
+スタックに積んである値を上からオフセット・ベースアドレスと解釈し
+ベースアドレス+オフセット番地のデータをスタックに積む(16bitアクセス)
 
 LDD
  09
   pop(#offset_addr)
   pop(#base_addr)
   push(D[#base_addr + #offset_addr])
+スタックに積んである値を上からオフセット・ベースアドレスと解釈し
+ベースアドレス+オフセット番地のデータをスタックに積む(32bitアクセス)
 
+ADD
+ 0A
+  pop(#a)
+  pop(#b)
+  push(#a + #b)
+スタックの上から2つ分の値を足してスタックに積む
+
+SUB
+ 0B
+  pop(#a)
+  pop(#b)
+  push(#a - #b)
+スタックの1番上の値から2番目の値を引いてスタックに積む
+
+MUL
+ 0C
+  pop(#a)
+  pop(#b)
+  push(#a [*] #b)
+スタックの上から2つ分の値をかけてスタックに積む(符号なし)
+
+DIV
+ 0D
+  pop(#a)
+  pop(#b)
+  push(#a [/] #b)
+  push(#a [%] #b)
+スタックの1番上の値を2番目の値で割ってスタックに積み、さらに余りを積む(符号なし)
