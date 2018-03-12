@@ -1,0 +1,99 @@
+teocpu-vm 仕様書(仮)
+
+§特徴
+32bit-RISC
+レジスタ66本(r0-r63,pc,sp)
+固定小数演算機能
+リトルエンディアン
+スタックの有効活用による高速化可能なアーキテクチャ
+SIMD命令搭載
+
+§各レジスタの役割
+r0-r15  : 汎用レジスタ(固定小数レジスタとして扱う場合 整数部28bit 小数部4bit)
+r16-r31 : 汎用レジスタ(固定小数レジスタとして扱う場合 整数部24bit 小数部8bit)
+r32-r47 : 汎用レジスタ(固定小数レジスタとして扱う場合 整数部22bit 小数部10bit)
+r48-r63 : 汎用レジスタ(固定小数レジスタとして扱う場合 整数部16bit 小数部16bit)
+r64     : プログラムカウンタ
+r65     : スタックポインタ
+
+§命令リスト表記凡例
+[命令名] [引数(ない場合もあり)]
+ [opコード/16進2ケタ] [引数データ/16進2ケタ区切り]
+  [処理内容]
+[備考(ない場合もあり)]
+
+引数 :
+	r   : レジスタ
+	imm : 即値(imm16,imm8など特機なき場合32bit)
+
+引数データ :
+	rr : レジスタ番号(0-65)
+	xx : 即値のうち8bit(並びはリトルエンディアン)
+
+処理内容 :
+	D[xx]    : メモリのxx番地(32bitアクセス)
+	W[xx]    : メモリのxx番地(16bitアクセス)
+	B[xx]    : メモリのxx番地(8bitアクセス)
+	r        : 引数(レジスタ)
+	imm      : 引数(即値)
+	push(xx) : D[sp] = xx; sp += 4
+	pop(xx)  : sp -= 4; xx = D[sp]
+	#name    : 一時的に数値を保存する内部変
+
+§命令リスト(多分そのうち増えます)
+
+NOP
+ 00
+  何もしない
+
+LR r
+ 01 rr
+  push(r)
+
+LI imm
+ 02 xx xx xx xx
+  push(imm)
+
+SR r
+ 03 rr
+  pop(r)
+
+STB
+ 04
+  pop(#offset_addr)
+  pop(#base_addr)
+  pop(#data)
+  B[#base_addr + #offset_addr] = #data & 0xff
+
+STW
+ 05
+  pop(#offset_addr)
+  pop(#base_addr)
+  pop(#data)
+  W[#base_addr + #offset_addr] = #data & 0xffff
+
+STD
+ 06
+  pop(#offset_addr)
+  pop(#base_addr)
+  pop(#data)
+  D[#base_addr + #offset_addr] = #data
+
+LDB
+ 07
+  pop(#offset_addr)
+  pop(#base_addr)
+  push(B[#base_addr + #offset_addr])
+
+LDW
+ 08
+  pop(#offset_addr)
+  pop(#base_addr)
+  push(W[#base_addr + #offset_addr])
+
+LDD
+ 09
+  pop(#offset_addr)
+  pop(#base_addr)
+  push(D[#base_addr + #offset_addr])
+
