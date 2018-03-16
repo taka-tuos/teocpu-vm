@@ -173,13 +173,13 @@ ABS
 SXB
  12
   pop(#b)
-  push((0xffffff [*] (#b & 0x80)) | (#b & 0x7f))
+  push((0x1fffffe [*] (#b & 0x80)) | (#b & 0xff))
 スタックの1番上の値を8bitから32bitに符号拡張してスタックに積む
 
 SXW
  13
   pop(#w)
-  push(0xFFFF [*] (#w & 0x8000) | (#w & 0x7fff))
+  push(0x1fffe [*] (#w & 0x8000) | (#w & 0xffff))
 スタックの1番上の値を16bitから32bitに符号拡張してスタックに積む
 
 AND
