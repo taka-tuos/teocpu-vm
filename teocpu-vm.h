@@ -4,8 +4,9 @@
 #define __TEOCPU_VM__
 
 typedef struct {
-	uint32_t r[66];	// r0-r63, pc, sp
-	uint8_t *m;		// memory
+	uint32_t r[66];						// r0-r63, pc, sp
+	uint8_t *m;							// memory
+	uint32_t(*cb)(uint32_t,uint32_t,uint8_t);	// 0xff000000 - 0xffffffff memory access callback (addr, data, r/~w) (32bit access only)
 } teocpu_t;
 
 typedef void(*teocpu_instruction)(teocpu_t *);

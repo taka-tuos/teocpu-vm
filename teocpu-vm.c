@@ -25,7 +25,7 @@ void teocpu_lr(teocpu_t *c)
 
 void teocpu_li(teocpu_t *c)
 {
-	teocpu_push(c, teocpu_read32(c->m + c->r[64]);
+	teocpu_push(c, teocpu_read32(c->m + c->r[64]));
 	c->r[64] += 4;
 }
 
@@ -65,7 +65,8 @@ void teocpu_std(teocpu_t *c)
 	teocpu_pop(c, &base);
 	teocpu_pop(c, &d);
 	
-	teocpu_write32(c->m + base + off, d & 0xffff);
+	if(((base + off) >> 24) == 0xff && c->cb) c->cb(base + off, d, 0);
+	else teocpu_write32(c->m + base + off, d);
 }
 
 void teocpu_ldb(teocpu_t *c)
@@ -97,7 +98,8 @@ void teocpu_ldd(teocpu_t *c)
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
 	
-	d = teocpu_read32(c->m + base + off);
+	if(((base + off) >> 24) == 0xff && c->cb) d = c->cb(base + off, 0, 1);
+	else d = teocpu_read32(c->m + base + off);
 	
 	teocpu_push(c, d);
 }
@@ -215,6 +217,188 @@ void teocpu_sxw(teocpu_t *c)
 	teocpu_push(c, (0x1fffe * (n & 0x8000)) | (n & 0xffff));
 }
 
+void teocpu_and(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, a & b);
+}
+
+void teocpu_or(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, a | b);
+}
+
+void teocpu_xor(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, a ^ b);
+}
+
+void teocpu_not(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n ^ 0xffffffff);
+}
+
+void teocpu_cmp(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, (a > b ? 1 : 0) | (a < b ? 2 : 0) | (a == b ? 4 : 0));
+}
+
+void teocpu_cmpi(teocpu_t *c)
+{
+	uint32_t ua, ub;
+	
+	teocpu_pop(c, &ua);
+	teocpu_pop(c, &ub);
+	
+	int32_t a, b;
+	
+	a = teocpu_signed(ua);
+	b = teocpu_signed(ub);
+	
+	teocpu_push(c, (a > b ? 1 : 0) | (a < b ? 2 : 0) | (a == b ? 4 : 0));
+}
+
+void teocpu_tst(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, (n > 0 ? 1 : 0) | (n == 0 ? 4 : 0));
+}
+
+void teocpu_tsti(teocpu_t *c)
+{
+	uint32_t un;
+	
+	teocpu_pop(c, &un);
+	
+	int32_t n;
+	
+	n = teocpu_signed(un);
+	
+	teocpu_push(c, (n > 0 ? 1 : 0) | (n < 0 ? 2 : 0) | (n == 0 ? 4 : 0));
+}
+
+void teocpu_ce(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n & 4);
+}
+
+void teocpu_ce(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n & 4);
+}
+
+void teocpu_cg(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n & 1);
+}
+
+void teocpu_cl(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n & 2);
+}
+
+void teocpu_ceg(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n & 5);
+}
+
+void teocpu_cel(teocpu_t *c)
+{
+	uint32_t n;
+	
+	teocpu_pop(c, &n);
+	
+	teocpu_push(c, n & 6);
+}
+
+void teocpu_b(teocpu_t *c)
+{
+	uint32_t a;
+	
+	teocpu_pop(c, &a);
+	
+	c->r[64] = a;
+}
+
+void teocpu_bc(teocpu_t *c)
+{
+	uint32_t a, f;
+	
+	teocpu_pop(c, &f);
+	teocpu_pop(c, &a);
+	
+	if(f != 0) c->r[64] = a;
+}
+
+void teocpu_c(teocpu_t *c)
+{
+	uint32_t a;
+	
+	teocpu_pop(c, &a);
+	
+	teocpu_push(c, c->r[64]);
+	
+	c->r[64] = a;
+}
+
+void teocpu_cc(teocpu_t *c)
+{
+	uint32_t a, f;
+	
+	teocpu_pop(c, &f);
+	teocpu_pop(c, &a);
+	
+	teocpu_push(c, c->r[64]);
+	
+	if(f != 0) c->r[64] = a;
+}
+
 teocpu_instruction teocpu_instructions[] = {
 	teocpu_nop,
 	teocpu_lr,
@@ -236,6 +420,23 @@ teocpu_instruction teocpu_instructions[] = {
 	teocpu_abs,
 	teocpu_sxb,
 	teocpu_sxw,
+	teocpu_and,
+	teocpu_or,
+	teocpu_xor,
+	teocpu_not,
+	teocpu_cmp,
+	teocpu_cmpi,
+	teocpu_tst,
+	teocpu_tsti,
+	teocpu_ce,
+	teocpu_cg,
+	teocpu_cl,
+	teocpu_ceg,
+	teocpu_cel,
+	teocpu_b,
+	teocpu_bc,
+	teocpu_c,
+	teocpu_cc,
 };
 
 void teocpu_execute(teocpu_t *c)
