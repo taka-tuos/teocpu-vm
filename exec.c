@@ -6,6 +6,7 @@ uint32_t callback_syscall(uint32_t a, uint32_t d, uint8_t rw)
 {
 	//printf("R/W REQ(%s)\n", rw ? "R" : "W");
 	if(!rw) printf("%c", d);
+	if(!rw && d == 0x0a) exit(0);
 	return 0;
 }
 

@@ -65,6 +65,8 @@ void teocpu_std(teocpu_t *c)
 	teocpu_pop(c, &base);
 	teocpu_pop(c, &d);
 	
+	//printf("std:(%08x+%08x)(%08x)\n",base, off, d);
+	
 	if(((base + off) >> 24) == 0xff && c->cb) c->cb(base + off, d, 0);
 	else teocpu_write32(c->m + base + off, d);
 }
@@ -75,6 +77,8 @@ void teocpu_ldb(teocpu_t *c)
 	
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
+	
+	//printf("ldb:(%08x+%08x)(%02x)\n",base, off, c->m[base + off]);
 	
 	teocpu_push(c, c->m[base + off]);
 }
@@ -110,6 +114,8 @@ void teocpu_add(teocpu_t *c)
 	
 	teocpu_pop(c, &a);
 	teocpu_pop(c, &b);
+	
+	//printf("add:%d+%d\n", a, b);
 	
 	teocpu_push(c, a + b);
 }
@@ -435,6 +441,8 @@ void teocpu_execute(teocpu_t *c)
 	uint8_t opcode = c->m[c->r[64]];
 	
 	c->r[64]++;
+	
+	//printf("%08x:%02x\n",c->r[64]-1,opcode);
 	
 	if(opcode < sizeof(teocpu_instructions) / sizeof(teocpu_instruction))teocpu_instructions[opcode](c);
 }
