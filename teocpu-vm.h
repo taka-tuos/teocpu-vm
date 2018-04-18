@@ -20,4 +20,6 @@ typedef void(*teocpu_instruction)(teocpu_t *);
 #define teocpu_signed(v) *((int32_t *)&(v))
 #define teocpu_unsigned(v) *((uint32_t *)&(v))
 
+void teocpu_execute(teocpu_t *c);
+
 #endif

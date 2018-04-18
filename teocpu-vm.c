@@ -1,4 +1,4 @@
-#include "teoccpu-vm.h"
+#include "teocpu-vm.h"
 
 void teocpu_push(teocpu_t *c, uint32_t d)
 {
@@ -312,15 +312,6 @@ void teocpu_ce(teocpu_t *c)
 	teocpu_push(c, n & 4);
 }
 
-void teocpu_ce(teocpu_t *c)
-{
-	uint32_t n;
-	
-	teocpu_pop(c, &n);
-	
-	teocpu_push(c, n & 4);
-}
-
 void teocpu_cg(teocpu_t *c)
 {
 	uint32_t n;
@@ -445,5 +436,5 @@ void teocpu_execute(teocpu_t *c)
 	
 	c->r[64]++;
 	
-	teocpu_instructions[opcode](c);
+	if(opcode < sizeof(teocpu_instructions) / sizeof(teocpu_instruction))teocpu_instructions[opcode](c);
 }
