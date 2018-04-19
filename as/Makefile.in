@@ -8,7 +8,6 @@ CP		= cp
 # default
 
 default :
-	$(MAKE) -C as
 	$(MAKE) $(TARGET)
 
 # rules
@@ -27,14 +26,11 @@ $(TARGET) : $(OBJS_TARGET) Makefile Makefile.in
 # commands
 
 clean :
-	$(MAKE) -C as clean
 	-$(RM) *.o
 
 clean-full :
-	$(MAKE) -C as clean
 	$(MAKE) clean
 	-$(RM) $(TARGET)
 
 git :
-	$(MAKE) -C as git
 	$(MAKE) clean-full
