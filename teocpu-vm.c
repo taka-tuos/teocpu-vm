@@ -269,6 +269,8 @@ void teocpu_cmp(teocpu_t *c)
 	teocpu_pop(c, &a);
 	teocpu_pop(c, &b);
 	
+	//printf("cmp:%d,%d(%08x,%08x)\n",a,b,a,b);
+	
 	teocpu_push(c, (a > b ? 1 : 0) | (a < b ? 2 : 0) | (a == b ? 4 : 0));
 }
 
@@ -367,8 +369,10 @@ void teocpu_bc(teocpu_t *c)
 {
 	uint32_t a, f;
 	
-	teocpu_pop(c, &f);
 	teocpu_pop(c, &a);
+	teocpu_pop(c, &f);
+	
+	//printf("bc:conditional %d\n",f);
 	
 	if(f != 0) c->r[64] = a;
 }
@@ -388,8 +392,8 @@ void teocpu_cc(teocpu_t *c)
 {
 	uint32_t a, f;
 	
-	teocpu_pop(c, &f);
 	teocpu_pop(c, &a);
+	teocpu_pop(c, &f);
 	
 	teocpu_push(c, c->r[64]);
 	
@@ -442,7 +446,7 @@ void teocpu_execute(teocpu_t *c)
 	
 	c->r[64]++;
 	
-	//printf("%08x:%02x\n",c->r[64]-1,opcode);
+	//printf("%08x:%02x(sp=%08x)\n",c->r[64]-1,opcode,c->r[65]);
 	
 	if(opcode < sizeof(teocpu_instructions) / sizeof(teocpu_instruction))teocpu_instructions[opcode](c);
 }

@@ -232,6 +232,9 @@ int main(int argc, char *argv[]) {
 				char *p = strdup(tok + 1);
 				if(p[strlen(p)-1] == '\'') p[strlen(p)-1] = 0;
 				fputs(p, dst);
+			} else {
+				printf("Unknown type argments \"%s\"\n",tok);
+				return -1;
 			}
 		}
 	}

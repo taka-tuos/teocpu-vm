@@ -1,19 +1,16 @@
-	li .text
+	li #0x30
 	sr %0
 .loop
-	li .fin
-	li #0
 	lr %0
-	ldb
-	sr %1
-	lr %1
-	tst
-	ce
-	bc
-	lr %1
 	li #0
 	li #0xff000000
 	std
+	lr %0
+	li #127
+	cmp
+	ce
+	li .fin
+	bc
 	li #1
 	lr %0
 	add
@@ -23,6 +20,3 @@
 .fin
 	li .fin
 	b
-.text
-	ascii 'hello,world'
-	db $0
