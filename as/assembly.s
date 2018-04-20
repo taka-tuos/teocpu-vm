@@ -1,7 +1,6 @@
 	li .text
 	sr %0
 .loop
-	li .fin
 	li #0
 	lr %0
 	ldb
@@ -9,6 +8,7 @@
 	lr %1
 	tst
 	ce
+	li .fin
 	bc
 	lr %1
 	li #0
