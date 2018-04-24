@@ -1,15 +1,27 @@
 #include "teocpu-vm.h"
 
+uint32_t teocpu_translate_address(teocpu_t *c, uint32_t vaddr)
+{
+	teocpu_pagedesc *pd = &c->m[c->r[66]];
+	uint32_t pagesize = teocpu_read32(pd->pagesize);
+	uint32_t p_pagelist = teocpu_read32(pd->p_pagelist);
+	
+	uint32_t pageindex = vaddr / pagesize;
+	uint32_t pageoffset = vaddr % pagesize;
+	
+	return teocpu_read32(&c->m[p_pagelist + pageindex * 4]) + pageoffset;
+}
+
 void teocpu_push(teocpu_t *c, uint32_t d)
 {
-	teocpu_write32(c->m + c->r[65], d);
+	teocpu_write32(c->m + teocpu_translate_address(c, c->r[65]), d);
 	c->r[65] += 4;
 }
 
 void teocpu_pop(teocpu_t *c, uint32_t *d)
 {
 	c->r[65] -= 4;
-	*d = teocpu_read32(c->m + c->r[65]);
+	*d = teocpu_read32(c->m + teocpu_translate_address(c, c->r[65]));
 }
 
 void teocpu_nop(teocpu_t *c)
@@ -19,19 +31,19 @@ void teocpu_nop(teocpu_t *c)
 
 void teocpu_lr(teocpu_t *c)
 {
-	teocpu_push(c, c->r[c->m[c->r[64]]]);
+	teocpu_push(c, c->r[c->m[teocpu_translate_address(c, c->r[64])]]);
 	c->r[64]++;
 }
 
 void teocpu_li(teocpu_t *c)
 {
-	teocpu_push(c, teocpu_read32(c->m + c->r[64]));
+	teocpu_push(c, teocpu_read32(c->m + teocpu_translate_address(c, c->r[64])));
 	c->r[64] += 4;
 }
 
 void teocpu_sr(teocpu_t *c)
 {
-	teocpu_pop(c, &c->r[c->m[c->r[64]]]);
+	teocpu_pop(c, &c->r[c->m[teocpu_translate_address(c, c->r[64])]]);
 	c->r[64]++;
 }
 
@@ -43,7 +55,7 @@ void teocpu_stb(teocpu_t *c)
 	teocpu_pop(c, &base);
 	teocpu_pop(c, &d);
 	
-	c->m[base + off] = d & 0xff;
+	c->m[teocpu_translate_address(c, base + off)] = d & 0xff;
 }
 
 void teocpu_stw(teocpu_t *c)
@@ -54,7 +66,7 @@ void teocpu_stw(teocpu_t *c)
 	teocpu_pop(c, &base);
 	teocpu_pop(c, &d);
 	
-	teocpu_write16(c->m + base + off, d & 0xffff);
+	teocpu_write16(c->m + teocpu_translate_address(c, base + off), d & 0xffff);
 }
 
 void teocpu_std(teocpu_t *c)
@@ -78,9 +90,9 @@ void teocpu_ldb(teocpu_t *c)
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
 	
-	//printf("ldb:(%08x+%08x)(%02x)\n",base, off, c->m[base + off]);
+	//printf("ldb:(%08x+%08x)(%08x)(%02x)\n",base, off, teocpu_translate_address(c, base + off), c->m[teocpu_translate_address(c, base + off)]);
 	
-	teocpu_push(c, c->m[base + off]);
+	teocpu_push(c, c->m[teocpu_translate_address(c, base + off)]);
 }
 
 void teocpu_ldw(teocpu_t *c)
@@ -90,7 +102,7 @@ void teocpu_ldw(teocpu_t *c)
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
 	
-	d = teocpu_read16(c->m + base + off);
+	d = teocpu_read16(c->m + teocpu_translate_address(c, base + off));
 	
 	teocpu_push(c, d);
 }
@@ -102,8 +114,8 @@ void teocpu_ldd(teocpu_t *c)
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
 	
-	if(((base + off) >> 24) == 0xff && c->cb) d = c->cb(base + off, 0, 1);
-	else d = teocpu_read32(c->m + base + off);
+	if(((base + off) >> 24) == 0xff && c->cb) d = c->cb(teocpu_translate_address(c, base + off), 0, 1);
+	else d = teocpu_read32(c->m + teocpu_translate_address(c, base + off));
 	
 	teocpu_push(c, d);
 }
@@ -442,11 +454,11 @@ teocpu_instruction teocpu_instructions[] = {
 
 void teocpu_execute(teocpu_t *c)
 {
-	uint8_t opcode = c->m[c->r[64]];
+	uint8_t opcode = c->m[teocpu_translate_address(c, c->r[64])];
 	
 	c->r[64]++;
 	
-	//printf("%08x:%02x(sp=%08x)\n",c->r[64]-1,opcode,c->r[65]);
+	//printf("%08x(%08x):%02x(sp=%08x)\n",c->r[64]-1,teocpu_translate_address(c, c->r[64]-1),opcode,c->r[65]);
 	
 	if(opcode < sizeof(teocpu_instructions) / sizeof(teocpu_instruction))teocpu_instructions[opcode](c);
 }
