@@ -24,19 +24,19 @@ int main(int argc, char *argv[]) {
 	c.cb = callback_syscall;
 	c.r[64] = 0;
 	c.r[65] = 0x1ffff;
-	c.r[66] = 0x30000;
+	c.r[66] = 0x80000;
 	
 	FILE *fp = fopen(argv[1],"rb");
 	
-	fread(c.m + 0x10,1,65536,fp);
+	fread(c.m + 0x10000,1,65536,fp);
 	
-	teocpu_pagedesc *pd = (teocpu_pagedesc *)(&c.m[0x30000]);
+	teocpu_pagedesc *pd = (teocpu_pagedesc *)(&c.m[0x80000]);
 	
-	teocpu_write32(pd->p_pagelist,0x30000+sizeof(teocpu_pagedesc));
-	teocpu_write32(pd->pagesize,0xffffffff);
-	teocpu_write32(pd->pagelist_len,1);
+	teocpu_write32_unpaged(pd->p_pagelist,0x80000+sizeof(teocpu_pagedesc));
+	teocpu_write32_unpaged(pd->pagesize,0xffffffff);
+	teocpu_write32_unpaged(pd->pagelist_len,1);
 	
-	teocpu_write32(&c.m[0x30000+sizeof(teocpu_pagedesc)], 0x10);
+	teocpu_write32_unpaged(&c.m[0x80000+sizeof(teocpu_pagedesc)], 0x10000);
 	
 	fclose(fp);
 	

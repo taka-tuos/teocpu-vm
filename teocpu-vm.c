@@ -3,25 +3,27 @@
 uint32_t teocpu_translate_address(teocpu_t *c, uint32_t vaddr)
 {
 	teocpu_pagedesc *pd = &c->m[c->r[66]];
-	uint32_t pagesize = teocpu_read32(pd->pagesize);
-	uint32_t p_pagelist = teocpu_read32(pd->p_pagelist);
+	uint32_t pagesize = teocpu_read32_unpaged(pd->pagesize);
+	uint32_t p_pagelist = teocpu_read32_unpaged(pd->p_pagelist);
 	
 	uint32_t pageindex = vaddr / pagesize;
 	uint32_t pageoffset = vaddr % pagesize;
 	
-	return teocpu_read32(&c->m[p_pagelist + pageindex * 4]) + pageoffset;
+	return teocpu_read32_unpaged(&c->m[p_pagelist + pageindex * 4]) + pageoffset;
 }
 
 void teocpu_push(teocpu_t *c, uint32_t d)
 {
-	teocpu_write32(c->m + teocpu_translate_address(c, c->r[65]), d);
+	teocpu_genpaddr32(c, c->r[65]);
+	teocpu_write32(d);
 	c->r[65] += 4;
 }
 
 void teocpu_pop(teocpu_t *c, uint32_t *d)
 {
 	c->r[65] -= 4;
-	*d = teocpu_read32(c->m + teocpu_translate_address(c, c->r[65]));
+	teocpu_genpaddr32(c, c->r[65]);
+	*d = teocpu_read32();
 }
 
 void teocpu_nop(teocpu_t *c)
@@ -37,7 +39,8 @@ void teocpu_lr(teocpu_t *c)
 
 void teocpu_li(teocpu_t *c)
 {
-	teocpu_push(c, teocpu_read32(c->m + teocpu_translate_address(c, c->r[64])));
+	teocpu_genpaddr32(c, c->r[64]);
+	teocpu_push(c, teocpu_read32());
 	c->r[64] += 4;
 }
 
@@ -66,7 +69,8 @@ void teocpu_stw(teocpu_t *c)
 	teocpu_pop(c, &base);
 	teocpu_pop(c, &d);
 	
-	teocpu_write16(c->m + teocpu_translate_address(c, base + off), d & 0xffff);
+	teocpu_genpaddr16(c, base + off);
+	teocpu_write16(d & 0xffff);
 }
 
 void teocpu_std(teocpu_t *c)
@@ -77,10 +81,12 @@ void teocpu_std(teocpu_t *c)
 	teocpu_pop(c, &base);
 	teocpu_pop(c, &d);
 	
+	teocpu_genpaddr32(c, base + off);
+	
 	//printf("std:(%08x+%08x)(%08x)\n",base, off, d);
 	
 	if(((base + off) >> 24) == 0xff && c->cb) c->cb(base + off, d, 0);
-	else teocpu_write32(c->m + base + off, d);
+	else teocpu_write32(d);
 }
 
 void teocpu_ldb(teocpu_t *c)
@@ -102,7 +108,9 @@ void teocpu_ldw(teocpu_t *c)
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
 	
-	d = teocpu_read16(c->m + teocpu_translate_address(c, base + off));
+	teocpu_genpaddr16(c, base + off);
+	
+	d = teocpu_read16();
 	
 	teocpu_push(c, d);
 }
@@ -114,8 +122,10 @@ void teocpu_ldd(teocpu_t *c)
 	teocpu_pop(c, &off);
 	teocpu_pop(c, &base);
 	
-	if(((base + off) >> 24) == 0xff && c->cb) d = c->cb(teocpu_translate_address(c, base + off), 0, 1);
-	else d = teocpu_read32(c->m + teocpu_translate_address(c, base + off));
+	teocpu_genpaddr32(c, base + off);
+	
+	if(((base + off) >> 24) == 0xff && c->cb) d = c->cb(base + off, 0, 1);
+	else d = teocpu_read32();
 	
 	teocpu_push(c, d);
 }
