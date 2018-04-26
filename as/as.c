@@ -1,10 +1,18 @@
+#include "../teocpu-vm.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
 
-#define teocpu_write32(p,d) (p)[0] = (d) & 0xff, (p)[1] = ((d) >> 8) & 0xff, (p)[2] = ((d) >> 16) & 0xff, (p)[3] = ((d) >> 24) & 0xff
+#define SIZE_SYMBOL (64 + (16 * 4))
+
+#define errmsg(s) puts(s); return -1;
+
+typedef struct {
+	char name[64];
+	uint32_t attribute[16];
+} symbol_t;
 
 char *teocpu_assembly[] = {
 	"0nop",
@@ -66,12 +74,42 @@ typedef struct {
 label_t label_list[2048];
 int last_label = 0;
 
+symbol_t symbol[4096];
+uint32_t replace_addr[65536];
+int last_replace = 0;
+int last_symbol = 0;
+int org_offset = 0;
+int now_offset = 0;
+
+void replacepoint(int offset)
+{
+	replace_addr[last_replace] = now_offset + offset;
+	last_replace++;
+}
+
+int get_symboladdr(char *s)
+{
+	int i;
+	char *d = s;
+
+	for(i=0;i<4096;i++) {
+		if(symbol[i].name[0] != 0 && strcmp(d,symbol[i].name)==0) return i;
+	}
+
+	return -1;
+}
+
 int main(int argc, char *argv[]) {
+	int coff;
+	
 	FILE *src = fopen(argv[1], "rt");
 	FILE *dst = fopen(argv[2], "wb");
 	
 	char **tok_list = NULL;
 	int tok_len = 0;
+	
+	if(strcmp(argv[3],"-flat") == 0) coff = 0;
+	else if(strcmp(argv[3],"-coff") == 0) coff = 1;
 	
 	do {
 		char l[256];
@@ -106,7 +144,6 @@ int main(int argc, char *argv[]) {
 	} while(!feof(src));
 	
 	int prev_is_inst = 0;
-	int now_offset = 0;
 	
 	for(int tokptr = 0; tokptr < tok_len; tokptr++) {
 		char *tok = tok_list[tokptr];
@@ -117,6 +154,42 @@ int main(int argc, char *argv[]) {
 			for(int i = 0;; i++) {
 				if(strcmp("db", ins) == 0) {
 					now_offset++;
+					break;
+				} else if(strcmp("global", ins) == 0) {
+					tokptr++;
+					if(tokptr < tok_len) {
+						if(tok[0] == '.') {
+							int addr = -1;
+							for(int i = 0;; i++) {
+								if(i == last_label) {
+									printf("Unknown label \"%s\"\n", tok);
+									return -1;
+								}
+								if(strcmp(tok, label_list[i].name) == 0) {
+									uint8_t p[4];
+									addr = label_list[i].offset;
+									break;
+								}
+							}
+							if(addr < 0) {
+								if(get_symboladdr(tok) >= 0) errmsg("symbols already declared");
+								for(i=0;i<256 && tok[i]!=0x0d && tok[i]!=0x0a && tok[i]!=0;i++) {
+									symbol[last_symbol].name[i]=tok[i];
+								}
+								symbol[last_symbol].attribute[0] = last_symbol + 0x40000000;
+								printf("EXTERN %s : %08x\n",symbol[last_symbol].name,symbol[last_symbol].attribute[0]);
+								last_symbol++;
+							} else {
+								if(get_symboladdr(tok) >= 0) errmsg("symbols already declared");
+								for(i=0;i<256 && tok[i]!=0x0d && tok[i]!=0x0a && tok[i]!=0;i++) {
+									symbol[last_symbol].name[i]=tok[i];
+								}
+								symbol[last_symbol].attribute[0] = addr - org_offset;
+								printf("GLOBAL %s : %08x\n",symbol[last_symbol].name,symbol[last_symbol].attribute[0]);
+								last_symbol++;
+							}
+						}
+					}
 					break;
 				} else if(strcmp("ascii", ins) == 0) {
 					tokptr++;
@@ -138,11 +211,44 @@ int main(int argc, char *argv[]) {
 		} else if(tok[0] == '.' && !prev_is_inst) {
 			prev_is_inst = 0;
 			label_list[last_label].name = strdup(tok);
-		label_list[last_label].offset = now_offset;
+			label_list[last_label].offset = now_offset;
 			last_label++;
 			printf("label_scan: found \"%s\"\n", tok);
 		} else {
 			prev_is_inst = 0;
+		}
+	}
+	
+	if(coff) {
+		uint32_t repaddr = 4 * 4 + last_symbol * SIZE_SYMBOL;
+		fprintf(dst,"TEOC");
+		uint8_t ls_le[4];
+		uint8_t ra_le[4];
+		uint8_t lr_le[4];
+		
+		printf("entno : %d\nrepaddr : %x\nrepno : %d\n\n",last_symbol,repaddr,last_replace);
+		
+		teocpu_write32_unpaged(ls_le,last_symbol);
+		teocpu_write32_unpaged(ra_le,repaddr);
+		teocpu_write32_unpaged(lr_le,last_replace);
+		
+		fwrite(ls_le,1,4,dst);
+		fwrite(ra_le,1,4,dst);
+		fwrite(lr_le,1,4,dst);
+		
+		for(int i = 0; i < last_symbol; i++) {
+			fwrite(symbol[i].name,1,64,dst);
+			uint8_t le[4];
+			for(int j = 0; j < 16; j++) {
+				teocpu_write32_unpaged(le,symbol[i].attribute[j]);
+				fwrite(le,1,4,dst);
+			}
+		}
+		
+		for(int i = 0; i < last_replace; i++) {
+			uint8_t le[4];
+			teocpu_write32_unpaged(le,replace_addr[i]);
+			fwrite(le,1,4,dst);
 		}
 	}
 	
@@ -170,6 +276,9 @@ int main(int argc, char *argv[]) {
 				if(strcmp("db", ins) == 0) {
 					ins_type = -1;
 					break;
+				} else if(strcmp("global", ins) == 0) {
+					ins_type = -3;
+					break;
 				} else if(strcmp("ascii", ins) == 0) {
 					ins_type = -2;
 					break;
@@ -190,21 +299,22 @@ int main(int argc, char *argv[]) {
 			if( (ins_type == 1 && (tok[0] == '#' || tok[0] == '.')) ||
 			(ins_type == 2 && tok[0] == '%') || ins_type == 0 || 
 			((tok[0] == '$' || tok[0] == '\'') && ins_type >= 0) || 
-			(!(tok[0] == '$' || tok[0] == '\'') && ins_type < 0) ||
-			(tok[0] == '$' && ins_type == -8) || 
-			(tok[0] == '\'' && ins_type == -1) ) {
+			(!(tok[0] == '$' || tok[0] == '\'' || tok[0] == '.') && ins_type < 0) ||
+			((tok[0] == '$' || tok[0] == '.') && ins_type == -2) || 
+			((tok[0] == '\'' || tok[0] == '$') && ins_type == -3) || 
+			((tok[0] == '\'' || tok[0] == '.') && ins_type == -1) ) {
 				puts("Invalid type argments");
 				return -1;
 			}
 			if(tok[0] == '.') {
-				for(int i = 0;; i++) {
+				for(int i = 0; ins_type != -3; i++) {
 					if(i == last_label) {
 						printf("Unknown label \"%s\"\n", tok);
 						return -1;
 					}
 					if(strcmp(tok, label_list[i].name) == 0) {
 						uint8_t p[4];
-						teocpu_write32(p, label_list[i].offset);
+						teocpu_write32_unpaged(p, label_list[i].offset);
 						fwrite(p, 1, 4, dst);
 						break;
 					}
@@ -213,7 +323,7 @@ int main(int argc, char *argv[]) {
 				char *p = strdup(tok + 1);
 				uint8_t u32[4];
 				long int n = strtol(p, &p, 0);
-				teocpu_write32(u32, n);
+				teocpu_write32_unpaged(u32, n);
 				fwrite(u32, 1, 4, dst);
 			} else if(tok[0] == '%') {
 				if(!isdigit(tok[1])) {

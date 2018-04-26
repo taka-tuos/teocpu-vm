@@ -2,7 +2,7 @@
 
 uint32_t teocpu_translate_address(teocpu_t *c, uint32_t vaddr)
 {
-	teocpu_pagedesc *pd = &c->m[c->r[66]];
+	teocpu_pagedesc *pd = (teocpu_pagedesc *)&c->m[c->r[66]];
 	uint32_t pagesize = teocpu_read32_unpaged(pd->pagesize);
 	uint32_t p_pagelist = teocpu_read32_unpaged(pd->p_pagelist);
 	

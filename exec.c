@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
 	teocpu_pagedesc *pd = (teocpu_pagedesc *)(&c.m[0x80000]);
 	
 	teocpu_write32_unpaged(pd->p_pagelist,0x80000+sizeof(teocpu_pagedesc));
-	teocpu_write32_unpaged(pd->pagesize,0xffffffff);
+	teocpu_write32_unpaged(pd->pagesize,0x80000);
 	teocpu_write32_unpaged(pd->pagelist_len,1);
 	
 	teocpu_write32_unpaged(&c.m[0x80000+sizeof(teocpu_pagedesc)], 0x10000);
