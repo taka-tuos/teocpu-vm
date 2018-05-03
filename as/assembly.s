@@ -25,4 +25,4 @@
 	b
 .text
 	ascii 'hello,world'
-	db $0
+	db #0

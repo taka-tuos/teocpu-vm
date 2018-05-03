@@ -155,6 +155,22 @@ int main(int argc, char *argv[]) {
 				if(strcmp("db", ins) == 0) {
 					now_offset++;
 					break;
+				} else if(strcmp("dw", ins) == 0) {
+					now_offset+=2;
+					break;
+				} else if(strcmp("dd", ins) == 0) {
+					now_offset+=4;
+					break;
+				} else if(strcmp("align", ins) == 0) {
+					tokptr++;
+					if(tokptr < tok_len) {
+						if(tok[0] == '#') {
+							char *p = strdup(tok + 1);
+							long int n = strtol(p, &p, 0);
+							while((now_offset % n) != 0) now_offset++;
+						}
+					}
+					break;
 				} else if(strcmp("global", ins) == 0) {
 					tokptr++;
 					if(tokptr < tok_len) {
@@ -166,7 +182,6 @@ int main(int argc, char *argv[]) {
 									return -1;
 								}
 								if(strcmp(tok, label_list[i].name) == 0) {
-									uint8_t p[4];
 									addr = label_list[i].offset;
 									break;
 								}
@@ -276,6 +291,15 @@ int main(int argc, char *argv[]) {
 				if(strcmp("db", ins) == 0) {
 					ins_type = -1;
 					break;
+				} else if(strcmp("dd", ins) == 0) {
+					ins_type = -4;
+					break;
+				} else if(strcmp("dw", ins) == 0) {
+					ins_type = -5;
+					break;
+				} else if(strcmp("align", ins) == 0) {
+					ins_type = -6;
+					break;
 				} else if(strcmp("global", ins) == 0) {
 					ins_type = -3;
 					break;
@@ -298,11 +322,11 @@ int main(int argc, char *argv[]) {
 		if(m == tok_mode_arg) {
 			if( (ins_type == 1 && (tok[0] == '#' || tok[0] == '.')) ||
 			(ins_type == 2 && tok[0] == '%') || ins_type == 0 || 
-			((tok[0] == '$' || tok[0] == '\'') && ins_type >= 0) || 
-			(!(tok[0] == '$' || tok[0] == '\'' || tok[0] == '.') && ins_type < 0) ||
-			((tok[0] == '$' || tok[0] == '.') && ins_type == -2) || 
-			((tok[0] == '\'' || tok[0] == '$') && ins_type == -3) || 
-			((tok[0] == '\'' || tok[0] == '.') && ins_type == -1) ) {
+			((tok[0] == '\'') && ins_type >= 0) || 
+			(!(tok[0] == '#' || tok[0] == '\'' || tok[0] == '.') && ins_type < 0) ||
+			((tok[0] == '#' || tok[0] == '.') && ins_type == -2) || 
+			((tok[0] == '\'' || tok[0] == '#') && ins_type == -3) || 
+			((tok[0] == '\'' || tok[0] == '.') && (ins_type == -1 || ins_type == -4 || ins_type == -5 || ins_type == -6)) ) {
 				puts("Invalid type argments");
 				return -1;
 			}
@@ -323,8 +347,20 @@ int main(int argc, char *argv[]) {
 				char *p = strdup(tok + 1);
 				uint8_t u32[4];
 				long int n = strtol(p, &p, 0);
-				teocpu_write32_unpaged(u32, n);
-				fwrite(u32, 1, 4, dst);
+				if(ins_type == -1) {
+					fputc(n & 0xff, dst);
+				} else if(ins_type == -4) {
+					teocpu_write16_unpaged(u32, n & 0xffff);
+					fwrite(u32, 1, 2, dst);
+				} else if(ins_type == -6) {
+					while((now_offset % n) != 0) {
+						now_offset++;
+						fwrite("", 1, 1, dst);
+					}
+				} else {
+					teocpu_write32_unpaged(u32, n);
+					fwrite(u32, 1, 4, dst);
+				}
 			} else if(tok[0] == '%') {
 				if(!isdigit(tok[1])) {
 					puts("Invalid register number");
@@ -332,11 +368,6 @@ int main(int argc, char *argv[]) {
 				}
 				char *p = strdup(tok + 1);
 				int n = atoi(p);
-				fputc(n, dst);
-			} else if(tok[0] == '$') {
-				char *p = strdup(tok + 1);
-				long int n = strtol(p, &p, 0);
-				n = n & 0xff;
 				fputc(n, dst);
 			} else if(tok[0] == '\'') {
 				char *p = strdup(tok + 1);
