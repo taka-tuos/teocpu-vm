@@ -8,12 +8,6 @@ CP		= cp
 # default
 
 default :
-	$(MAKE) -C as
-	$(MAKE) -C ld
-	$(MAKE) -C cc1
-	$(MAKE) -C cpp
-	$(MAKE) -C ucc
-	$(MAKE) -C golibc
 	$(MAKE) $(TARGET)
 
 # rules
@@ -32,23 +26,8 @@ $(TARGET) : $(OBJS_TARGET) Makefile Makefile.in
 # commands
 
 clean :
-	$(MAKE) -C as clean
-	$(MAKE) -C ld clean
-	$(MAKE) -C cc1 clean
-	$(MAKE) -C cpp clean
-	$(MAKE) -C ucc clean
-	$(MAKE) -C golibc clean
 	-$(RM) *.o
 
 clean-full :
 	$(MAKE) clean
-	$(MAKE) -C as clean-full
-	$(MAKE) -C ld clean-full
-	$(MAKE) -C cc1 clean-full
-	$(MAKE) -C cpp clean-full
-	$(MAKE) -C ucc clean-full
-	$(MAKE) -C golibc clean-full
 	-$(RM) $(TARGET)
-
-git :
-	$(MAKE) clean-full

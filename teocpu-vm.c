@@ -16,12 +16,12 @@ void teocpu_push(teocpu_t *c, uint32_t d)
 {
 	teocpu_genpaddr32(c, c->r[65]);
 	teocpu_write32(d);
-	c->r[65] += 4;
+	c->r[65] -= 4;
 }
 
 void teocpu_pop(teocpu_t *c, uint32_t *d)
 {
-	c->r[65] -= 4;
+	c->r[65] += 4;
 	teocpu_genpaddr32(c, c->r[65]);
 	*d = teocpu_read32();
 }
@@ -137,7 +137,7 @@ void teocpu_add(teocpu_t *c)
 	teocpu_pop(c, &a);
 	teocpu_pop(c, &b);
 	
-	//printf("add:%d+%d\n", a, b);
+	//printf("add %10d + %10d (%08x + %08x) = %d(%08x)\n",a,b,a,b,a+b,a+b);
 	
 	teocpu_push(c, a + b);
 }
@@ -149,7 +149,19 @@ void teocpu_sub(teocpu_t *c)
 	teocpu_pop(c, &a);
 	teocpu_pop(c, &b);
 	
+	//printf("sub %10d - %10d (%08x - %08x) = %d(%08x)\n",a,b,a,b,a-b,a-b);
+	
 	teocpu_push(c, a - b);
+}
+
+void teocpu_rsub(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, b - a);
 }
 
 void teocpu_mul(teocpu_t *c)
@@ -168,6 +180,8 @@ void teocpu_div(teocpu_t *c)
 	
 	teocpu_pop(c, &a);
 	teocpu_pop(c, &b);
+	
+	printf("div %10d / %10d = %10d...%10d\n",a,b,a,b,a/b,a%b);
 	
 	teocpu_push(c, a / b);
 	teocpu_push(c, a % b);
@@ -204,6 +218,8 @@ void teocpu_divi(teocpu_t *c)
 	
 	i = a / b;
 	j = a % b;
+	
+	printf("divi %10d / %10d = %10d...%10d\n",a,b,a,b,a/b,a%b);
 	
 	teocpu_push(c, teocpu_unsigned(i));
 	teocpu_push(c, teocpu_unsigned(j));
@@ -284,6 +300,26 @@ void teocpu_not(teocpu_t *c)
 	teocpu_push(c, n ^ 0xffffffff);
 }
 
+void teocpu_lls(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, a << b);
+}
+
+void teocpu_lrs(teocpu_t *c)
+{
+	uint32_t a, b;
+	
+	teocpu_pop(c, &a);
+	teocpu_pop(c, &b);
+	
+	teocpu_push(c, a >> b);
+}
+
 void teocpu_cmp(teocpu_t *c)
 {
 	uint32_t a, b;
@@ -291,7 +327,7 @@ void teocpu_cmp(teocpu_t *c)
 	teocpu_pop(c, &a);
 	teocpu_pop(c, &b);
 	
-	//printf("cmp:%d,%d(%08x,%08x)\n",a,b,a,b);
+	printf("cmp:%d,%d(%08x,%08x)\n",a,b,a,b);
 	
 	teocpu_push(c, (a > b ? 1 : 0) | (a < b ? 2 : 0) | (a == b ? 4 : 0));
 }
@@ -307,6 +343,8 @@ void teocpu_cmpi(teocpu_t *c)
 	
 	a = teocpu_signed(ua);
 	b = teocpu_signed(ub);
+	
+	printf("cmpi:%d,%d(%08x,%08x)\n",a,b,a,b);
 	
 	teocpu_push(c, (a > b ? 1 : 0) | (a < b ? 2 : 0) | (a == b ? 4 : 0));
 }
@@ -435,6 +473,7 @@ teocpu_instruction teocpu_instructions[] = {
 	teocpu_ldd,
 	teocpu_add,
 	teocpu_sub,
+	teocpu_rsub,
 	teocpu_mul,
 	teocpu_div,
 	teocpu_muli,
@@ -447,6 +486,8 @@ teocpu_instruction teocpu_instructions[] = {
 	teocpu_or,
 	teocpu_xor,
 	teocpu_not,
+	teocpu_lls,
+	teocpu_lrs,
 	teocpu_cmp,
 	teocpu_cmpi,
 	teocpu_tst,
@@ -462,13 +503,56 @@ teocpu_instruction teocpu_instructions[] = {
 	teocpu_cc,
 };
 
+char *teocpu_assembly[] = {
+	"0nop",
+	"1lr",
+	"2li",
+	"1sr",
+	"0stb",
+	"0stw",
+	"0std",
+	"0ldb",
+	"0ldw",
+	"0ldd",
+	"0add",
+	"0sub",
+	"0rsub",
+	"0mul",
+	"0div",
+	"0muli",
+	"0divi",
+	"0neg",
+	"0abs",
+	"0sxb",
+	"0sxw",
+	"0and",
+	"0or",
+	"0xor",
+	"0not",
+	"0lls",
+	"0lrs",
+	"0cmp",
+	"0cmpi",
+	"0tst",
+	"0tsti",
+	"0ce",
+	"0cg",
+	"0cl",
+	"0ceg",
+	"0cel",
+	"0b",
+	"0bc",
+	"0c",
+	"0cc",
+};
+
 void teocpu_execute(teocpu_t *c)
 {
 	uint8_t opcode = c->m[teocpu_translate_address(c, c->r[64])];
 	
 	c->r[64]++;
 	
-	//printf("%08x(%08x):%02x(sp=%08x)\n",c->r[64]-1,teocpu_translate_address(c, c->r[64]-1),opcode,c->r[65]);
+	//printf("%08x(%08x):%02x(sp=%08x)\t%s\n",c->r[64]-1,teocpu_translate_address(c, c->r[64]-1),opcode,c->r[65],teocpu_assembly[opcode]+1);
 	
 	if(opcode < sizeof(teocpu_instructions) / sizeof(teocpu_instruction))teocpu_instructions[opcode](c);
 }

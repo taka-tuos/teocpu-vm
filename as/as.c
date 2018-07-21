@@ -7,7 +7,11 @@
 
 #define SIZE_SYMBOL (64 + (16 * 4))
 
-#define errmsg(s) puts(s); return -1;
+void errmsg(s)
+{
+	puts(s);
+	exit(-1);
+}
 
 typedef struct {
 	char name[64];
@@ -27,6 +31,7 @@ char *teocpu_assembly[] = {
 	"0ldd",
 	"0add",
 	"0sub",
+	"0rsub",
 	"0mul",
 	"0div",
 	"0muli",
@@ -39,6 +44,8 @@ char *teocpu_assembly[] = {
 	"0or",
 	"0xor",
 	"0not",
+	"0lls",
+	"0lrs",
 	"0cmp",
 	"0cmpi",
 	"0tst",
@@ -99,6 +106,40 @@ int get_symboladdr(char *s)
 	return -1;
 }
 
+void write_header(FILE *dst)
+{
+	uint32_t repaddr = 4 * 4 + last_symbol * SIZE_SYMBOL;
+	fprintf(dst,"TEOC");
+	uint8_t ls_le[4];
+	uint8_t ra_le[4];
+	uint8_t lr_le[4];
+	
+	printf("entno : %d\nrepaddr : %x\nrepno : %d\n\n",last_symbol,repaddr,last_replace);
+	
+	teocpu_write32_unpaged(ls_le,last_symbol);
+	teocpu_write32_unpaged(ra_le,repaddr);
+	teocpu_write32_unpaged(lr_le,last_replace);
+	
+	fwrite(ls_le,1,4,dst);
+	fwrite(ra_le,1,4,dst);
+	fwrite(lr_le,1,4,dst);
+	
+	for(int i = 0; i < last_symbol; i++) {
+		fwrite(symbol[i].name,1,64,dst);
+		uint8_t le[4];
+		for(int j = 0; j < 16; j++) {
+			teocpu_write32_unpaged(le,symbol[i].attribute[j]);
+			fwrite(le,1,4,dst);
+		}
+	}
+	
+	for(int i = 0; i < last_replace; i++) {
+		uint8_t le[4];
+		teocpu_write32_unpaged(le,replace_addr[i]);
+		fwrite(le,1,4,dst);
+	}
+}
+
 int main(int argc, char *argv[]) {
 	int coff;
 	
@@ -106,18 +147,24 @@ int main(int argc, char *argv[]) {
 	FILE *dst = fopen(argv[2], "wb");
 	
 	char **tok_list = NULL;
+	int *tok_line_list = NULL;
 	int tok_len = 0;
 	
 	if(strcmp(argv[3],"-flat") == 0) coff = 0;
 	else if(strcmp(argv[3],"-coff") == 0) coff = 1;
 	
+	int tokread_line = 0;
+	
 	do {
-		char l[256];
-		if(fgets(l, 256, src) == NULL) break;
+		char l[1024];
+		if(fgets(l, 1024, src) == NULL) break;
+		tokread_line++;
 		
 		char *p = l;
 		while(isspace(*p) && *p) p++;
 		char *q = p;
+		
+		if(*q == ';' || !*q) continue;
 		
 		while(!isspace(*p) && *p) p++;
 		
@@ -128,6 +175,9 @@ int main(int argc, char *argv[]) {
 		
 		tok_list = realloc(tok_list, sizeof(char *) * (tok_len + 1));
 		tok_list[tok_len] = strdup(q);
+		
+		tok_line_list = realloc(tok_line_list, sizeof(int) * (tok_len + 1));
+		tok_line_list[tok_len] = tokread_line;
 		tok_len++;
 		
 		puts(q);
@@ -135,11 +185,15 @@ int main(int argc, char *argv[]) {
 		if(*p != 0) {
 			if(p[strlen(p)-1] == '\n') p[strlen(p)-1] = 0;
 			
-			tok_list = realloc(tok_list, sizeof(char *) * (tok_len + 1));
-			tok_list[tok_len] = strdup(p);
-			tok_len++;
-			
-			puts(p);
+			if(*p != 0) {
+				tok_list = realloc(tok_list, sizeof(char *) * (tok_len + 1));
+				tok_list[tok_len] = strdup(p);
+				tok_line_list = realloc(tok_line_list, sizeof(int) * (tok_len + 1));
+				tok_line_list[tok_len] = tokread_line;
+				tok_len++;
+				
+				puts(p);
+			}
 		}
 	} while(!feof(src));
 	
@@ -163,6 +217,8 @@ int main(int argc, char *argv[]) {
 					break;
 				} else if(strcmp("align", ins) == 0) {
 					tokptr++;
+					char *tok = tok_list[tokptr];
+					prev_is_inst = 0;
 					if(tokptr < tok_len) {
 						if(tok[0] == '#') {
 							char *p = strdup(tok + 1);
@@ -171,16 +227,27 @@ int main(int argc, char *argv[]) {
 						}
 					}
 					break;
-				} else if(strcmp("global", ins) == 0) {
+				} else if(strcmp("fill", ins) == 0) {
 					tokptr++;
+					char *tok = tok_list[tokptr];
+					prev_is_inst = 0;
 					if(tokptr < tok_len) {
+						if(tok[0] == '#') {
+							char *p = strdup(tok + 1);
+							long int n = strtol(p, &p, 0);
+							now_offset += n;
+						}
+					}
+					break;
+				} else if(strcmp("global", ins) == 0) {
+					printf("!!!GLOBAL!!!\n");
+					tokptr++;
+					char *tok = tok_list[tokptr];
+					if(tokptr < tok_len) {
+						printf("GLOBAL : %c\n",tok[0]);
 						if(tok[0] == '.') {
 							int addr = -1;
-							for(int i = 0;; i++) {
-								if(i == last_label) {
-									printf("Unknown label \"%s\"\n", tok);
-									return -1;
-								}
+							for(int i = 0; i < last_label; i++) {
 								if(strcmp(tok, label_list[i].name) == 0) {
 									addr = label_list[i].offset;
 									break;
@@ -194,6 +261,7 @@ int main(int argc, char *argv[]) {
 								symbol[last_symbol].attribute[0] = last_symbol + 0x40000000;
 								printf("EXTERN %s : %08x\n",symbol[last_symbol].name,symbol[last_symbol].attribute[0]);
 								last_symbol++;
+								break;
 							} else {
 								if(get_symboladdr(tok) >= 0) errmsg("symbols already declared");
 								for(i=0;i<256 && tok[i]!=0x0d && tok[i]!=0x0a && tok[i]!=0;i++) {
@@ -202,8 +270,10 @@ int main(int argc, char *argv[]) {
 								symbol[last_symbol].attribute[0] = addr - org_offset;
 								printf("GLOBAL %s : %08x\n",symbol[last_symbol].name,symbol[last_symbol].attribute[0]);
 								last_symbol++;
+								break;
 							}
 						}
+						prev_is_inst = 0;
 					}
 					break;
 				} else if(strcmp("ascii", ins) == 0) {
@@ -229,43 +299,19 @@ int main(int argc, char *argv[]) {
 			label_list[last_label].offset = now_offset;
 			last_label++;
 			printf("label_scan: found \"%s\"\n", tok);
+		} else if(tok[0] == '.' && prev_is_inst) {
+			printf("label_scan: repreq \"%s\"\n", tok);
+			replacepoint(-4);
 		} else {
 			prev_is_inst = 0;
 		}
 	}
 	
 	if(coff) {
-		uint32_t repaddr = 4 * 4 + last_symbol * SIZE_SYMBOL;
-		fprintf(dst,"TEOC");
-		uint8_t ls_le[4];
-		uint8_t ra_le[4];
-		uint8_t lr_le[4];
-		
-		printf("entno : %d\nrepaddr : %x\nrepno : %d\n\n",last_symbol,repaddr,last_replace);
-		
-		teocpu_write32_unpaged(ls_le,last_symbol);
-		teocpu_write32_unpaged(ra_le,repaddr);
-		teocpu_write32_unpaged(lr_le,last_replace);
-		
-		fwrite(ls_le,1,4,dst);
-		fwrite(ra_le,1,4,dst);
-		fwrite(lr_le,1,4,dst);
-		
-		for(int i = 0; i < last_symbol; i++) {
-			fwrite(symbol[i].name,1,64,dst);
-			uint8_t le[4];
-			for(int j = 0; j < 16; j++) {
-				teocpu_write32_unpaged(le,symbol[i].attribute[j]);
-				fwrite(le,1,4,dst);
-			}
-		}
-		
-		for(int i = 0; i < last_replace; i++) {
-			uint8_t le[4];
-			teocpu_write32_unpaged(le,replace_addr[i]);
-			fwrite(le,1,4,dst);
-		}
+		write_header(dst);
 	}
+	
+	size_t heade = ftell(dst);
 	
 	now_offset = 0;
 	
@@ -300,6 +346,9 @@ int main(int argc, char *argv[]) {
 				} else if(strcmp("align", ins) == 0) {
 					ins_type = -6;
 					break;
+				} else if(strcmp("fill", ins) == 0) {
+					ins_type = -7;
+					break;
 				} else if(strcmp("global", ins) == 0) {
 					ins_type = -3;
 					break;
@@ -326,40 +375,65 @@ int main(int argc, char *argv[]) {
 			(!(tok[0] == '#' || tok[0] == '\'' || tok[0] == '.') && ins_type < 0) ||
 			((tok[0] == '#' || tok[0] == '.') && ins_type == -2) || 
 			((tok[0] == '\'' || tok[0] == '#') && ins_type == -3) || 
-			((tok[0] == '\'' || tok[0] == '.') && (ins_type == -1 || ins_type == -4 || ins_type == -5 || ins_type == -6)) ) {
-				puts("Invalid type argments");
+			((tok[0] == '\'' || tok[0] == '.') && (ins_type == -1 || ins_type == -4 || ins_type == -5 || ins_type == -6 || ins_type == -7)) ) {
+				printf("(%d) Invalid type argments\n", tok_line_list[tokptr]);
 				return -1;
 			}
 			if(tok[0] == '.') {
 				for(int i = 0; ins_type != -3; i++) {
 					if(i == last_label) {
-						printf("Unknown label \"%s\"\n", tok);
-						return -1;
+						int sa = get_symboladdr(tok);
+						if(sa < 0) {
+							printf("(%d) Unknown label \"%s\"\n", tok_line_list[tokptr], tok);
+							return -1;
+						}
+						uint8_t p[4];
+						teocpu_write32_unpaged(p, symbol[sa].attribute[0]);
+						//replacepoint(-now_offset + ftell(dst) - heade);
+						fwrite(p, 1, 4, dst);
+						break;
 					}
 					if(strcmp(tok, label_list[i].name) == 0) {
 						uint8_t p[4];
 						teocpu_write32_unpaged(p, label_list[i].offset);
+						//replacepoint(-now_offset + ftell(dst) - heade);
 						fwrite(p, 1, 4, dst);
 						break;
 					}
+					now_offset+=4;
 				}
 			} else if(tok[0] == '#') {
+				/*if(*(tok + 1) == 0) {
+					tokptr++;
+					tok = tok_list[tokptr];
+				}*/
 				char *p = strdup(tok + 1);
+				while(isspace(*p)) p++;
+				
 				uint8_t u32[4];
 				long int n = strtol(p, &p, 0);
 				if(ins_type == -1) {
 					fputc(n & 0xff, dst);
+					now_offset++;
 				} else if(ins_type == -4) {
 					teocpu_write16_unpaged(u32, n & 0xffff);
 					fwrite(u32, 1, 2, dst);
+					now_offset+=2;
 				} else if(ins_type == -6) {
 					while((now_offset % n) != 0) {
 						now_offset++;
 						fwrite("", 1, 1, dst);
 					}
+				} else if(ins_type == -7) {
+					while(n) {
+						now_offset++;
+						fwrite("", 1, 1, dst);
+						n--;
+					}
 				} else {
 					teocpu_write32_unpaged(u32, n);
 					fwrite(u32, 1, 4, dst);
+					now_offset+=4;
 				}
 			} else if(tok[0] == '%') {
 				if(!isdigit(tok[1])) {
@@ -369,15 +443,22 @@ int main(int argc, char *argv[]) {
 				char *p = strdup(tok + 1);
 				int n = atoi(p);
 				fputc(n, dst);
+				now_offset++;
 			} else if(tok[0] == '\'') {
 				char *p = strdup(tok + 1);
 				if(p[strlen(p)-1] == '\'') p[strlen(p)-1] = 0;
 				fputs(p, dst);
+				now_offset+=strlen(p);
 			} else {
-				printf("Unknown type argments \"%s\"\n",tok);
+				printf("(%d) Unknown type argments \"%s\"\n",tok_line_list[tokptr],tok);
 				return -1;
 			}
 		}
+	}
+	
+	if(coff) {
+		fseek(dst, 0, SEEK_SET);
+		write_header(dst);
 	}
 	
 	fclose(dst);

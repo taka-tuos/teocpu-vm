@@ -1,0 +1,24 @@
+MAKE	= make -r
+UCC		= ../ucc/ucc
+RM		= rm
+CP		= cp
+
+# default
+
+default :
+	$(MAKE) $(TARGET)
+
+# normal rules
+
+%.o : %.c Makefile Makefile.in
+	$(UCC) -coff -I . -log ${@:o=lst} ${@:o=c} $@
+
+# commands
+
+clean :
+
+clean-full :
+	$(MAKE) clean
+	-$(RM) $(TARGET)
+	-$(RM) *.lst
+	-$(RM) *.tmp
